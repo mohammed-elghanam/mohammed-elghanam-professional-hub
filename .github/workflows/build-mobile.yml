@@ -1,0 +1,94 @@
+name: Build Flutter Mobile Editions
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/build-mobile.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create Android platform
+        run: flutter create . --platforms=android --org=com.mohammedelghanam --project-name=mohammed_elghanam_professional_hub
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Rename APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk ../Mohammed_Elghanam_Professional_Hub_Android.apk
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mohammed-Elghanam-Android-APK
+          path: Mohammed_Elghanam_Professional_Hub_Android.apk
+          if-no-files-found: error
+
+      - name: Publish stable GitHub release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd ..
+          TAG="mobile-latest"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" Mohammed_Elghanam_Professional_Hub_Android.apk --clobber
+          else
+            gh release create "$TAG" Mohammed_Elghanam_Professional_Hub_Android.apk --title "Mobile Executive Edition" --notes "Android Flutter release for Mohammed Elghanam Professional Hub. iOS source is maintained in the same Flutter project and requires Apple signing before public distribution."
+          fi
+
+  ios-validation:
+    name: iOS Flutter Validation
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create iOS platform
+        run: flutter create . --platforms=ios --org=com.mohammedelghanam --project-name=mohammed_elghanam_professional_hub
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Build iOS without code signing
+        run: flutter build ios --release --no-codesign
