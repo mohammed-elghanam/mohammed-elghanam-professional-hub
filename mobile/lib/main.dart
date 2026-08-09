@@ -30,7 +30,6 @@ class HomePage extends StatelessWidget {
   static const gold = Color(0xFFF2B642);
   static const cyan = Color(0xFF20D9E9);
   static const panel = Color(0xFF071D2F);
-  static const muted = Color(0xFFADB DCA);
 
   Future<void> open(String url) async {
     final uri = Uri.parse(url);
@@ -42,7 +41,7 @@ class HomePage extends StatelessWidget {
       color: panel,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
-        side: BorderSide(color: cyan.withValues(alpha: .24)),
+        side: BorderSide(color: cyan.withOpacity(.24)),
       ),
       child: InkWell(
         onTap: onTap,
@@ -55,7 +54,7 @@ class HomePage extends StatelessWidget {
               height: 50,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: gold.withValues(alpha: .8)),
+                border: Border.all(color: gold.withOpacity(.8)),
               ),
               child: Icon(icon, color: gold),
             ),
@@ -138,7 +137,7 @@ class _Pill extends StatelessWidget {
     decoration: BoxDecoration(
       color: const Color(0xFF08253A),
       borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: const Color(0xFF20D9E9).withValues(alpha: .35)),
+      border: Border.all(color: const Color(0xFF20D9E9).withOpacity(.35)),
     ),
     child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFEAF4FA))),
   );
