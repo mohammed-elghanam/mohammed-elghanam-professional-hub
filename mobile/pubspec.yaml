@@ -1,7 +1,7 @@
 name: mohammed_elghanam_professional_hub
 description: Native Flutter mobile executive portfolio for Mohammed Elghanam.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -10,6 +10,8 @@ dependencies:
   flutter:
     sdk: flutter
   url_launcher: ^6.3.2
+  pdfrx: ^2.4.7
+  pdf: ^3.12.0
 
 dev_dependencies:
   flutter_test:
