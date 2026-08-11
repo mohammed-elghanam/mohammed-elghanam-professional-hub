@@ -1,0 +1,147 @@
+name: Build Signed Android Production Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  production-android:
+    name: Signed Android Production APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Validate required signing secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+
+      - name: Create Android platform
+        run: flutter create . --platforms=android --org=com.mohammedelghanam --project-name=mohammed_elghanam_professional_hub
+
+      - name: Enable Android release internet access
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text()
+          permission = '<uses-permission android:name="android.permission.INTERNET"/>'
+          if permission not in text:
+              text = text.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    ' + permission, 1)
+              manifest.write_text(text)
+          PY
+
+      - name: Restore permanent release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/mohammed-elghanam-release.jks
+
+      - name: Configure permanent Android release signing
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=mohammed-elghanam-release.jks
+          EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/build.gradle.kts')
+          s = p.read_text()
+          header = '''import java.util.Properties\nimport java.io.FileInputStream\n'''
+          if 'import java.util.Properties' not in s:
+              s = header + s
+          marker = 'flutter {\n    source = "../.."\n}\n'
+          signing_block = '''\nval keystoreProperties = Properties()\nval keystorePropertiesFile = rootProject.file("key.properties")\nif (keystorePropertiesFile.exists()) {\n    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\n}\n'''
+          if 'val keystoreProperties = Properties()' not in s:
+              s = signing_block + '\n' + s
+          debug_line = 'signingConfig = signingConfigs.getByName("debug")'
+          replacement = 'signingConfig = signingConfigs.create("release") {\n            keyAlias = keystoreProperties["keyAlias"] as String\n            keyPassword = keystoreProperties["keyPassword"] as String\n            storeFile = file(keystoreProperties["storeFile"] as String)\n            storePassword = keystoreProperties["storePassword"] as String\n        }'
+          if debug_line not in s:
+              raise SystemExit('Expected Flutter release signing template line not found')
+          s = s.replace(debug_line, replacement, 1)
+          p.write_text(s)
+          PY
+
+      - name: Verify final Android identity
+        run: |
+          grep -F 'applicationId = "com.mohammedelghanam.mohammed_elghanam_professional_hub"' android/app/build.gradle.kts
+          grep -F '<uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
+          grep -F 'signingConfigs.create("release")' android/app/build.gradle.kts
+
+      - name: Remove generated template test
+        run: rm -f test/widget_test.dart
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Analyze application code
+        run: flutter analyze lib --no-fatal-warnings
+
+      - name: Build signed release APK
+        run: flutter build apk --release
+
+      - name: Verify APK signature
+        run: |
+          ${ANDROID_HOME}/build-tools/$(ls ${ANDROID_HOME}/build-tools | sort -V | tail -1)/apksigner verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk | tee ../android-signature.txt
+          grep -F 'Verified' ../android-signature.txt
+
+      - name: Rename production APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk ../Mohammed_Elghanam_Professional_Hub_Android.apk
+
+      - name: Generate production checksums
+        run: |
+          cd ..
+          sha256sum Mohammed_Elghanam_Professional_Hub_Android.apk > Mohammed_Elghanam_Professional_Hub_Android.sha256
+
+      - name: Upload signed production artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mohammed-Elghanam-Android-Production-Signed
+          path: |
+            Mohammed_Elghanam_Professional_Hub_Android.apk
+            Mohammed_Elghanam_Professional_Hub_Android.sha256
+            android-signature.txt
+          if-no-files-found: error
+
+      - name: Publish stable production release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd ..
+          TAG="mobile-latest"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" Mohammed_Elghanam_Professional_Hub_Android.apk Mohammed_Elghanam_Professional_Hub_Android.sha256 --clobber
+          else
+            gh release create "$TAG" Mohammed_Elghanam_Professional_Hub_Android.apk Mohammed_Elghanam_Professional_Hub_Android.sha256 --title "Mobile Executive Edition" --notes "Signed Android production release for Mohammed Elghanam Professional Hub."
+          fi
