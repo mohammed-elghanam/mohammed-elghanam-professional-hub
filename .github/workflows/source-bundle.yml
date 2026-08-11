@@ -1,0 +1,68 @@
+name: Publish iPhone and Web Source Bundle
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'mobile/lib/**'
+      - 'mobile/pubspec.yaml'
+      - 'iphone-edition.html'
+      - 'web-hub.html'
+      - 'index.html'
+      - '.github/workflows/source-bundle.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  source-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare source package
+        run: |
+          rm -rf source-package
+          mkdir -p source-package/mobile/lib
+          cp mobile/lib/*.dart source-package/mobile/lib/
+          cp mobile/pubspec.yaml source-package/mobile/
+          cp iphone-edition.html source-package/
+          cp web-hub.html source-package/
+          cp index.html source-package/
+          cp .github/workflows/build-mobile.yml source-package/BUILD_MOBILE_REFERENCE.yml
+          cat > source-package/README_SOURCE.txt <<'EOF'
+          Mohammed Elghanam Professional Hub — iPhone / Web Source Code
+
+          Contents:
+          - Flutter shared Android/iOS source under mobile/lib/
+          - Flutter package configuration: mobile/pubspec.yaml
+          - iPhone web edition: iphone-edition.html
+          - Universal web hub: web-hub.html
+          - Main landing page: index.html
+          - Reference mobile build workflow
+
+          The same Flutter source is used for Android and iOS.
+          Native iOS installation requires Apple code signing and TestFlight/App Store Connect distribution.
+          EOF
+          cd source-package
+          zip -r ../Mohammed_Elghanam_iPhone_Web_Source_Code.zip .
+
+      - name: Upload source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mohammed-Elghanam-iPhone-Web-Source
+          path: Mohammed_Elghanam_iPhone_Web_Source_Code.zip
+          if-no-files-found: error
+
+      - name: Publish source ZIP to stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="mobile-latest"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" Mohammed_Elghanam_iPhone_Web_Source_Code.zip --clobber
+          else
+            gh release create "$TAG" Mohammed_Elghanam_iPhone_Web_Source_Code.zip --title "Mobile Executive Edition" --notes "Mobile and web source bundle."
+          fi
