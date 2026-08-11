@@ -1,4 +1,4 @@
-name: Build Flutter Mobile Editions
+name: Validate Flutter Mobile Editions
 
 on:
   workflow_dispatch:
@@ -9,11 +9,11 @@ on:
       - '.github/workflows/build-mobile.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   android:
-    name: Android APK
+    name: Android Validation APK
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -37,7 +37,7 @@ jobs:
       - name: Create Android platform
         run: flutter create . --platforms=android --org=com.mohammedelghanam --project-name=mohammed_elghanam_professional_hub
 
-      - name: Enable Android release internet access
+      - name: Enable Android internet access
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -47,11 +47,12 @@ jobs:
           if permission not in text:
               text = text.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    ' + permission, 1)
               manifest.write_text(text)
-          print(manifest.read_text())
           PY
 
-      - name: Verify Android internet permission
-        run: grep -F '<uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
+      - name: Verify Android package and internet permission
+        run: |
+          grep -F 'applicationId = "com.mohammedelghanam.mohammed_elghanam_professional_hub"' android/app/build.gradle.kts
+          grep -F '<uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
 
       - name: Remove generated template test
         run: rm -f test/widget_test.dart
@@ -62,30 +63,18 @@ jobs:
       - name: Analyze application code
         run: flutter analyze lib --no-fatal-warnings
 
-      - name: Build release APK
+      - name: Build validation APK
         run: flutter build apk --release
 
-      - name: Rename APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk ../Mohammed_Elghanam_Professional_Hub_Android.apk
+      - name: Rename validation APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk ../Mohammed_Elghanam_Professional_Hub_Android_Validation.apk
 
-      - name: Upload workflow artifact
+      - name: Upload validation artifact only
         uses: actions/upload-artifact@v4
         with:
-          name: Mohammed-Elghanam-Android-APK
-          path: Mohammed_Elghanam_Professional_Hub_Android.apk
+          name: Mohammed-Elghanam-Android-Validation-APK
+          path: Mohammed_Elghanam_Professional_Hub_Android_Validation.apk
           if-no-files-found: error
-
-      - name: Publish stable GitHub release asset
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cd ..
-          TAG="mobile-latest"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" Mohammed_Elghanam_Professional_Hub_Android.apk --clobber
-          else
-            gh release create "$TAG" Mohammed_Elghanam_Professional_Hub_Android.apk --title "Mobile Executive Edition" --notes "Android Flutter release for Mohammed Elghanam Professional Hub. iOS source is maintained in the same Flutter project and requires Apple signing before public distribution."
-          fi
 
   ios-validation:
     name: iOS Flutter Validation
