@@ -72,16 +72,16 @@ jobs:
           from pathlib import Path
           p = Path('android/app/build.gradle.kts')
           s = p.read_text()
+          android_line = 'android {'
+          signing_block = 'android {\n    signingConfigs {\n        create("release") {\n            keyAlias = System.getenv("ANDROID_KEY_ALIAS")\n            keyPassword = System.getenv("ANDROID_KEY_PASSWORD")\n            storeFile = file("mohammed-elghanam-release.jks")\n            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")\n        }\n    }'
+          if android_line not in s:
+              raise SystemExit('Android block not found')
+          s = s.replace(android_line, signing_block, 1)
           debug_line = 'signingConfig = signingConfigs.getByName("debug")'
-          replacement = '''signingConfig = signingConfigs.create("release") {
-            keyAlias = System.getenv("ANDROID_KEY_ALIAS")
-            keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
-            storeFile = file("mohammed-elghanam-release.jks")
-            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-        }'''
+          release_line = 'signingConfig = signingConfigs.getByName("release")'
           if debug_line not in s:
               raise SystemExit('Expected Flutter release signing template line not found')
-          s = s.replace(debug_line, replacement, 1)
+          s = s.replace(debug_line, release_line, 1)
           p.write_text(s)
           PY
 
@@ -89,8 +89,8 @@ jobs:
         run: |
           grep -F 'applicationId = "com.mohammedelghanam.mohammed_elghanam_professional_hub"' android/app/build.gradle.kts
           grep -F '<uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
-          grep -F 'signingConfigs.create("release")' android/app/build.gradle.kts
-          grep -F 'System.getenv("ANDROID_KEYSTORE_PASSWORD")' android/app/build.gradle.kts
+          grep -F 'create("release") {' android/app/build.gradle.kts
+          grep -F 'signingConfig = signingConfigs.getByName("release")' android/app/build.gradle.kts
 
       - name: Remove generated template test
         run: rm -f test/widget_test.dart
