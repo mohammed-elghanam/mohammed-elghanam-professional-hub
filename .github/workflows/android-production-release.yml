@@ -67,56 +67,21 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/mohammed-elghanam-release.jks
 
       - name: Configure permanent Android release signing
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          cat > android/key.properties <<EOF
-          storePassword=$ANDROID_KEYSTORE_PASSWORD
-          keyPassword=$ANDROID_KEY_PASSWORD
-          keyAlias=$ANDROID_KEY_ALIAS
-          storeFile=mohammed-elghanam-release.jks
-          EOF
           python3 - <<'PY'
           from pathlib import Path
-
           p = Path('android/app/build.gradle.kts')
           s = p.read_text()
-
-          # Add keystore property loading immediately after the plugins block.
-          start = s.find('plugins {')
-          if start < 0:
-              raise SystemExit('plugins block not found')
-          brace = s.find('{', start)
-          depth = 0
-          end = None
-          for i in range(brace, len(s)):
-              if s[i] == '{':
-                  depth += 1
-              elif s[i] == '}':
-                  depth -= 1
-                  if depth == 0:
-                      end = i + 1
-                      break
-          if end is None:
-              raise SystemExit('plugins block closing brace not found')
-
-          signing_props = '''\n\nval keystoreProperties = java.util.Properties()\nval keystorePropertiesFile = rootProject.file("key.properties")\nif (keystorePropertiesFile.exists()) {\n    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }\n}\n'''
-          if 'val keystoreProperties = java.util.Properties()' not in s:
-              s = s[:end] + signing_props + s[end:]
-
-          signing_config = '''android {\n    signingConfigs {\n        create("release") {\n            keyAlias = keystoreProperties["keyAlias"] as String\n            keyPassword = keystoreProperties["keyPassword"] as String\n            storeFile = file(keystoreProperties["storeFile"] as String)\n            storePassword = keystoreProperties["storePassword"] as String\n        }\n    }\n'''
-          if 'create("release") {' not in s:
-              if 'android {' not in s:
-                  raise SystemExit('android block not found')
-              s = s.replace('android {', signing_config, 1)
-
           debug_line = 'signingConfig = signingConfigs.getByName("debug")'
-          release_line = 'signingConfig = signingConfigs.getByName("release")'
+          replacement = '''signingConfig = signingConfigs.create("release") {
+            keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+            keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            storeFile = file("mohammed-elghanam-release.jks")
+            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+        }'''
           if debug_line not in s:
               raise SystemExit('Expected Flutter release signing template line not found')
-          s = s.replace(debug_line, release_line, 1)
+          s = s.replace(debug_line, replacement, 1)
           p.write_text(s)
           PY
 
@@ -124,8 +89,8 @@ jobs:
         run: |
           grep -F 'applicationId = "com.mohammedelghanam.mohammed_elghanam_professional_hub"' android/app/build.gradle.kts
           grep -F '<uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
-          grep -F 'create("release") {' android/app/build.gradle.kts
-          grep -F 'signingConfig = signingConfigs.getByName("release")' android/app/build.gradle.kts
+          grep -F 'signingConfigs.create("release")' android/app/build.gradle.kts
+          grep -F 'System.getenv("ANDROID_KEYSTORE_PASSWORD")' android/app/build.gradle.kts
 
       - name: Remove generated template test
         run: rm -f test/widget_test.dart
@@ -137,6 +102,10 @@ jobs:
         run: flutter analyze lib --no-fatal-warnings
 
       - name: Build signed release APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: flutter build apk --release
 
       - name: Verify APK signature
