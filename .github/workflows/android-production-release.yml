@@ -2,6 +2,10 @@ name: Build Signed Android Production Release
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/android-production-release.yml'
 
 permissions:
   contents: write
@@ -81,7 +85,6 @@ jobs:
           header = '''import java.util.Properties\nimport java.io.FileInputStream\n'''
           if 'import java.util.Properties' not in s:
               s = header + s
-          marker = 'flutter {\n    source = "../.."\n}\n'
           signing_block = '''\nval keystoreProperties = Properties()\nval keystorePropertiesFile = rootProject.file("key.properties")\nif (keystorePropertiesFile.exists()) {\n    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\n}\n'''
           if 'val keystoreProperties = Properties()' not in s:
               s = signing_block + '\n' + s
