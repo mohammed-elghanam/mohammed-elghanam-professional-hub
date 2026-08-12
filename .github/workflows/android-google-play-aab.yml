@@ -2,6 +2,10 @@ name: Build Signed Google Play AAB
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/android-google-play-aab.yml'
 
 permissions:
   contents: write
@@ -87,7 +91,8 @@ jobs:
           grep -F '<uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
           grep -F 'create("release") {' android/app/build.gradle.kts
           grep -F 'signingConfig = signingConfigs.getByName("release")' android/app/build.gradle.kts
-          grep -F 'version: 4.0.0+7' pubspec.yaml
+          grep -F 'version: 4.0.0+8' pubspec.yaml
+          grep -F 'Privacy Policy' lib/main.dart
 
       - name: Remove generated template test
         run: rm -f test/widget_test.dart
