@@ -1,0 +1,66 @@
+name: Publish Google Play Store Assets
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/google-play-store-assets.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  store-assets:
+    name: Verify and Publish Store Assets
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate portrait Google Play icon
+        run: |
+          python3 -m pip install --user Pillow
+          python3 tool/generate_portrait_launcher_icon.py
+
+      - name: Verify Google Play icon requirements
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          p = Path('../Mohammed_Elghanam_Professional_Hub_Play_Icon_512.png')
+          if not p.is_file():
+              raise SystemExit('Google Play icon was not generated')
+          im = Image.open(p)
+          if im.size != (512, 512):
+              raise SystemExit(f'Unexpected icon size: {im.size}')
+          if im.mode != 'RGBA':
+              raise SystemExit(f'Icon must be RGBA/32-bit, got {im.mode}')
+          if p.stat().st_size > 1024 * 1024:
+              raise SystemExit(f'Icon exceeds 1024 KB: {p.stat().st_size} bytes')
+          print(f'Verified Google Play icon: {im.size}, {im.mode}, {p.stat().st_size} bytes')
+          PY
+
+      - name: Generate store icon checksum
+        run: |
+          cd ..
+          sha256sum Mohammed_Elghanam_Professional_Hub_Play_Icon_512.png > Mohammed_Elghanam_Professional_Hub_Play_Icon_512.sha256
+
+      - name: Upload verified store icon artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mohammed-Elghanam-Google-Play-Store-Icon
+          path: |
+            Mohammed_Elghanam_Professional_Hub_Play_Icon_512.png
+            Mohammed_Elghanam_Professional_Hub_Play_Icon_512.sha256
+          if-no-files-found: error
+
+      - name: Publish verified icon to stable mobile release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd ..
+          gh release upload mobile-latest Mohammed_Elghanam_Professional_Hub_Play_Icon_512.png Mohammed_Elghanam_Professional_Hub_Play_Icon_512.sha256 --clobber
