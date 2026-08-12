@@ -2,6 +2,10 @@ name: Build Signed Google Play AAB
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/android-google-play-aab.yml'
 
 permissions:
   contents: write
@@ -44,6 +48,13 @@ jobs:
       - name: Create Android platform
         run: flutter create . --platforms=android --org=com.mohammedelghanam --project-name=mohammed_elghanam_professional_hub
 
+      - name: Generate portrait app icon from original embedded portrait
+        run: |
+          python3 -m pip install --user Pillow
+          python3 tool/generate_portrait_launcher_icon.py
+          test -s ../Mohammed_Elghanam_Professional_Hub_Play_Icon_512.png
+          file ../Mohammed_Elghanam_Professional_Hub_Play_Icon_512.png
+
       - name: Enable Android internet access
         run: |
           python3 - <<'PY'
@@ -59,8 +70,7 @@ jobs:
       - name: Restore permanent release keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/mohammed-elghanam-release.jks
+        run: printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/mohammed-elghanam-release.jks
 
       - name: Configure permanent Android release signing
         run: |
@@ -123,6 +133,7 @@ jobs:
         run: |
           cd ..
           sha256sum Mohammed_Elghanam_Professional_Hub_Google_Play.aab > Mohammed_Elghanam_Professional_Hub_Google_Play.sha256
+          sha256sum Mohammed_Elghanam_Professional_Hub_Play_Icon_512.png > Mohammed_Elghanam_Professional_Hub_Play_Icon_512.sha256
 
       - name: Upload Google Play AAB artifact
         uses: actions/upload-artifact@v4
@@ -131,6 +142,8 @@ jobs:
           path: |
             Mohammed_Elghanam_Professional_Hub_Google_Play.aab
             Mohammed_Elghanam_Professional_Hub_Google_Play.sha256
+            Mohammed_Elghanam_Professional_Hub_Play_Icon_512.png
+            Mohammed_Elghanam_Professional_Hub_Play_Icon_512.sha256
             aab-signature-verification.txt
             aab-certificate.txt
           if-no-files-found: error
@@ -140,4 +153,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd ..
-          gh release upload mobile-latest Mohammed_Elghanam_Professional_Hub_Google_Play.aab Mohammed_Elghanam_Professional_Hub_Google_Play.sha256 --clobber
+          gh release upload mobile-latest Mohammed_Elghanam_Professional_Hub_Google_Play.aab Mohammed_Elghanam_Professional_Hub_Google_Play.sha256 Mohammed_Elghanam_Professional_Hub_Play_Icon_512.png Mohammed_Elghanam_Professional_Hub_Play_Icon_512.sha256 --clobber
