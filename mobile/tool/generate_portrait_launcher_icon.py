@@ -68,8 +68,10 @@ def main() -> None:
     portrait = load_original_portrait()
     master = build_master_icon(portrait)
 
+    # Google Play requires a 512x512 32-bit PNG with an alpha channel.
+    # Keep RGBA even though the artwork itself is visually opaque.
     store_icon = Path('../Mohammed_Elghanam_Professional_Hub_Play_Icon_512.png')
-    master.resize((512, 512), Image.Resampling.LANCZOS).convert('RGB').save(store_icon, 'PNG', optimize=True)
+    master.resize((512, 512), Image.Resampling.LANCZOS).convert('RGBA').save(store_icon, 'PNG', optimize=True)
 
     densities = {
         'mipmap-mdpi': 48,
@@ -84,6 +86,7 @@ def main() -> None:
         master.resize((px, px), Image.Resampling.LANCZOS).convert('RGB').save(target, 'PNG', optimize=True)
 
     print(f'Generated Google Play icon: {store_icon}')
+    print('Google Play icon mode: RGBA (32-bit PNG with alpha channel)')
     for folder, px in densities.items():
         print(f'{folder}/ic_launcher.png: {px}x{px}')
 
