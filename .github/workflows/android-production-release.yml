@@ -2,6 +2,10 @@ name: Build Signed Android Production Release
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/android-production-release.yml'
 
 permissions:
   contents: write
@@ -44,6 +48,13 @@ jobs:
       - name: Create Android platform
         run: flutter create . --platforms=android --org=com.mohammedelghanam --project-name=mohammed_elghanam_professional_hub
 
+      - name: Generate portrait app icon from original embedded portrait
+        run: |
+          python3 -m pip install --user Pillow
+          python3 tool/generate_portrait_launcher_icon.py
+          test -s ../Mohammed_Elghanam_Professional_Hub_Play_Icon_512.png
+          file ../Mohammed_Elghanam_Professional_Hub_Play_Icon_512.png
+
       - name: Enable Android release internet access
         run: |
           python3 - <<'PY'
@@ -59,8 +70,7 @@ jobs:
       - name: Restore permanent release keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/mohammed-elghanam-release.jks
+        run: printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/mohammed-elghanam-release.jks
 
       - name: Configure permanent Android release signing
         run: |
@@ -87,6 +97,8 @@ jobs:
           grep -F '<uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
           grep -F 'create("release") {' android/app/build.gradle.kts
           grep -F 'signingConfig = signingConfigs.getByName("release")' android/app/build.gradle.kts
+          grep -F 'version: 4.0.0+8' pubspec.yaml
+          grep -F 'Privacy Policy' lib/main.dart
 
       - name: Remove generated template test
         run: rm -f test/widget_test.dart
@@ -104,10 +116,12 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: flutter build apk --release
 
-      - name: Verify APK signature
+      - name: Verify APK signature and permanent certificate
         run: |
-          ${ANDROID_HOME}/build-tools/$(ls ${ANDROID_HOME}/build-tools | sort -V | tail -1)/apksigner verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk | tee ../android-signature.txt
-          grep -F 'Verified' ../android-signature.txt
+          APKSIGNER=${ANDROID_HOME}/build-tools/$(ls ${ANDROID_HOME}/build-tools | sort -V | tail -1)/apksigner
+          $APKSIGNER verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk | tee ../android-signature.txt
+          grep -F 'Verified using v2 scheme (APK Signature Scheme v2): true' ../android-signature.txt
+          grep -Fi 'a01831e7edb2f1f9958ae9eca5b8c9dfaf14aaa230e05303f2a36be9591d21f4' ../android-signature.txt
 
       - name: Rename production APK
         run: cp build/app/outputs/flutter-apk/app-release.apk ../Mohammed_Elghanam_Professional_Hub_Android.apk
@@ -116,6 +130,7 @@ jobs:
         run: |
           cd ..
           sha256sum Mohammed_Elghanam_Professional_Hub_Android.apk > Mohammed_Elghanam_Professional_Hub_Android.sha256
+          sha256sum Mohammed_Elghanam_Professional_Hub_Play_Icon_512.png > Mohammed_Elghanam_Professional_Hub_Play_Icon_512.sha256
 
       - name: Upload signed production artifact
         uses: actions/upload-artifact@v4
@@ -124,6 +139,8 @@ jobs:
           path: |
             Mohammed_Elghanam_Professional_Hub_Android.apk
             Mohammed_Elghanam_Professional_Hub_Android.sha256
+            Mohammed_Elghanam_Professional_Hub_Play_Icon_512.png
+            Mohammed_Elghanam_Professional_Hub_Play_Icon_512.sha256
             android-signature.txt
           if-no-files-found: error
 
@@ -133,8 +150,4 @@ jobs:
         run: |
           cd ..
           TAG="mobile-latest"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" Mohammed_Elghanam_Professional_Hub_Android.apk Mohammed_Elghanam_Professional_Hub_Android.sha256 --clobber
-          else
-            gh release create "$TAG" Mohammed_Elghanam_Professional_Hub_Android.apk Mohammed_Elghanam_Professional_Hub_Android.sha256 --title "Mobile Executive Edition" --notes "Signed Android production release for Mohammed Elghanam Professional Hub."
-          fi
+          gh release upload "$TAG" Mohammed_Elghanam_Professional_Hub_Android.apk Mohammed_Elghanam_Professional_Hub_Android.sha256 Mohammed_Elghanam_Professional_Hub_Play_Icon_512.png Mohammed_Elghanam_Professional_Hub_Play_Icon_512.sha256 --clobber
